@@ -6,81 +6,249 @@
 
 45 million Americans don't know where to go for care or what it will cost. This leads to $700+ ER bills when urgent care would be $145. Healthcare navigation is broken.
 
-## Our Solution
+## Solution
 
-ClearBill Advisor is a multi-agent AI system that:
+ClearBill Advisor uses AI agents to analyze symptoms, discover nearby facilities, extract real-time pricing from websites, and recommend the most cost-effective care option personalized to your insurance.
 
-1. **Analyzes your symptoms** (triage agent)
-2. **Checks your insurance** (benefits agent via OCR)
-3. **Discovers real pricing** (Firecrawl web intelligence)
-4. **Recommends best option** (ranking agent)
+---
 
-All in under 10 seconds.
+## System Architecture
+
+### High-Level Overview
+
+![High-Level Overview](assets/diagrams/architecture.png)
+
+### Multi-Agent Pipeline (4 Phases)
+
+![Multi-Agent Pipeline](assets/diagrams/api-flow.png)
+
+### Data Flow
+
+![Data Flow](assets/diagrams/data-flow.png)
+
+---
 
 ## Tech Stack
 
 ### Backend
-- **Python + FastAPI** - High-performance async API server
-- **OpenRouter** - Multi-agent orchestration (Haiku + Sonnet + DeepSeek)
-- **Reducto** - Insurance card OCR with document intelligence
-- **Firecrawl** - Real-time price discovery from websites
+| Technology | Purpose |
+|------------|---------|
+| **Python 3.9+** | Core language |
+| **FastAPI** | High-performance async API server |
+| **OpenRouter** | Multi-agent orchestration (Claude Haiku/Sonnet) |
+| **Firecrawl** | Real-time web scraping & price discovery |
+| **Nominatim** | Free geocoding (OpenStreetMap) |
+| **Pydantic** | Data validation & serialization |
+| **httpx** | Async HTTP client |
 
 ### Frontend
-- **Next.js** - React framework with TypeScript
-- **Tailwind CSS** - Modern, responsive styling
-- **Framer Motion** - Smooth animations
+| Technology | Purpose |
+|------------|---------|
+| **Next.js 16** | React framework with App Router |
+| **React 19** | UI library |
+| **TypeScript** | Type-safe JavaScript |
+| **Tailwind CSS v4** | Modern, responsive styling |
+| **Framer Motion** | Smooth animations |
+| **Lucide React** | Icon library |
 
-### Optional
-- **Supabase** - Caching and scaling infrastructure
+### External APIs
+| API | Usage |
+|-----|-------|
+| **OpenRouter** | Claude 3.5 Haiku for symptom analysis & ranking |
+| **Firecrawl** | `/search` for discovery, `/agent` for pricing extraction |
+| **Nominatim** | Address → coordinates, distance calculation |
+| **Reducto** | Insurance card OCR (planned) |
+
+---
 
 ## Project Structure
 
 ```
-clearbill-advisor/
-├── backend/              # Python FastAPI server
-│   ├── main.py          # API endpoints and orchestration
-│   ├── agents/          # Individual agent implementations
-│   ├── models.py        # Data models
-│   └── requirements.txt # Python dependencies
-├── frontend/            # Next.js React app
-│   ├── app/            # Next.js 14 app directory
-│   ├── components/     # React components
-│   └── public/         # Static assets
-├── docs/               # Pitch deck and demo assets
-├── .env                # Environment variables (not committed)
-└── README.md           # This file
+clear-bill/
+├── backend/                      # Python FastAPI server
+│   ├── main.py                   # API endpoints & middleware
+│   ├── advisor.py                # 4-phase orchestration pipeline
+│   ├── models.py                 # Pydantic data models
+│   ├── openrouter_client.py      # Claude AI agents
+│   ├── firecrawl_client.py       # Web scraping & price discovery
+│   ├── geocoding.py              # Distance calculation service
+│   ├── requirements.txt          # Python dependencies
+│   ├── test_live_time.py         # Live wait time tests
+│   ├── debug_geocoding.py        # Geocoding debug script
+│   └── search_results/           # Cached Firecrawl results
+│
+├── frontend/                     # Next.js React app
+│   ├── src/
+│   │   └── app/
+│   │       ├── page.tsx          # Main UI component
+│   │       ├── layout.tsx        # Root layout
+│   │       ├── globals.css       # Tailwind + custom styles
+│   │       └── api/              # API routes (legacy)
+│   ├── package.json              # Dependencies
+│   └── next.config.ts            # Next.js configuration
+│
+├── docs/                         # Documentation
+│   └── STEP_1_COMPLETION_REPORT.md
+│
+├── BLUEPRINT.md                  # Detailed architecture spec
+├── LIVE_TIME.md                  # Live wait time feature spec
+├── README.md                     # This file
+└── .env                          # Environment variables
 ```
 
-## Core Data Models
+---
 
-### Insurance Information
-- Provider name (e.g., "Anthem Blue Cross")
-- Plan type (e.g., "PPO Silver")
-- Member ID
-- Copay amounts (urgent care, ER, specialist)
-- Deductible information
+## Core Components
 
-### Facility Information
-- Name (e.g., "Carbon Health Downtown")
-- Address and distance from user
-- Pricing for procedures
-- Wait time estimate
-- Quality rating
-- Accepts insurance (yes/no)
+### Backend Modules
 
-### Recommendation
-- Recommended facility
-- Estimated out-of-pocket cost
-- Reasoning for the choice
-- Alternative options
-- What to expect (procedures, timeline)
+```mermaid
+classDiagram
+    class ClearBillAdvisor {
+        +get_recommendation()
+        -_enrich_symptoms()
+        -_search_facilities()
+        -_calculate_costs()
+        -_rank_facilities()
+    }
+
+    class SymptomEnricherAgent {
+        +enrich()
+        -_call_claude()
+        -_parse_response()
+    }
+
+    class RankingAgent {
+        +rank()
+        -_build_prompt()
+        -_call_claude()
+    }
+
+    class FirecrawlClient {
+        +search_facilities()
+        +extract_pricing()
+        -_search()
+        -_agent_extract()
+    }
+
+    class GeocodingService {
+        +geocode()
+        +calculate_distance()
+        -_haversine()
+    }
+
+    ClearBillAdvisor --> SymptomEnricherAgent
+    ClearBillAdvisor --> RankingAgent
+    ClearBillAdvisor --> FirecrawlClient
+    ClearBillAdvisor --> GeocodingService
+```
+
+
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Service health check |
+| `/advisor/recommend` | POST | Main recommendation endpoint |
+| `/facilities/search` | GET | Search facilities by location |
+| `/ocr/insurance-card` | POST | Insurance card OCR (stub) |
+| `/demo/scenarios` | GET | Predefined test scenarios |
+| `/agent/stream` | WebSocket | Real-time agent progress |
+
+### Data Models
+
+```mermaid
+erDiagram
+    RecommendationRequest {
+        string symptoms
+        string location
+        string insurance_plan
+    }
+
+    RecommendationResponse {
+        FacilityInfo recommended
+        string[] reasoning
+        string why_not_er
+        FacilityInfo[] alternatives
+        string urgency
+        string care_level
+    }
+
+    FacilityInfo {
+        string name
+        string address
+        float distance_miles
+        int your_cost
+        string wait_time
+        string confidence
+    }
+
+    InsuranceInfo {
+        string provider
+        string plan_type
+        int urgent_care_copay
+        int er_copay
+    }
+
+    RecommendationRequest ||--o{ RecommendationResponse : generates
+    RecommendationResponse ||--|{ FacilityInfo : contains
+```
+
+
+
+---
+
+## Features
+
+### Symptom Analysis
+- 4 urgency levels: low, moderate, high, emergency
+- Auto-detection of emergencies (chest pain, stroke, severe bleeding)
+- Generates optimized search queries for facility discovery
+- Returns expected procedures (X-ray, exam, splint, etc.)
+
+### Facility Discovery
+- Real-time search via Firecrawl `/search`
+- Extracts facility names, URLs, ratings
+- Ranks by distance, ratings, and care type match
+- Top 3 candidates sent for deep pricing extraction
+
+### Price Extraction
+- Autonomous web navigation via Firecrawl `/agent`
+- Finds pricing from PDFs, transparency pages, payment portals
+- Confidence scoring: "high" (verified) vs "low" (estimated)
+- Pre-cached pricing for major chains (Carbon Health, One Medical)
+
+### Geocoding & Distance
+- Free Nominatim API (no key required)
+- Haversine formula for accurate distances
+- Intelligent fallback: address → city → ZIP
+- Pre-populated cache for major Bay Area cities
+
+### Insurance Integration
+Supports 11 major insurers with copay lookups:
+- Anthem PPO/HMO
+- Blue Shield PPO/HMO
+- Aetna PPO/HMO
+- Cigna PPO/HMO
+- UnitedHealth PPO/HMO
+- Kaiser Permanente
+- Medicare
+- Uninsured (cash pricing)
+
+### Live Wait Times
+- Regex patterns detect: "Wait time: 15 min", "Next available: 2:30 PM"
+- Scrapes facility booking/status pages
+- Sources: "verified_live" vs "estimated"
+
+---
 
 ## Setup Instructions
 
 ### Prerequisites
 - Python 3.9+
 - Node.js 18+
-- API keys for OpenRouter, Reducto, and Firecrawl
+- API keys for OpenRouter and Firecrawl
 
 ### Backend Setup
 
@@ -90,7 +258,7 @@ cd backend
 
 # Create virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
@@ -114,34 +282,118 @@ npm run dev
 
 ### Environment Variables
 
-Copy `.env` to the project root and fill in your API keys:
+Create `.env` in the project root:
 
 ```bash
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-REDUCTO_API_KEY=your_reducto_api_key_here
-FIRECRAWL_API_KEY=your_firecrawl_api_key_here
-SUPABASE_URL=your_supabase_url_here  # Optional
-SUPABASE_KEY=your_supabase_key_here  # Optional
+# Required
+OPENROUTER_API_KEY=sk-or-v1-your_key_here
+FIRECRAWL_API_KEY=fc-your_key_here
+
+# Optional
+REDUCTO_API_KEY=your_reducto_key_here
+SUPABASE_URL=your_supabase_url_here
+SUPABASE_KEY=your_supabase_key_here
 ```
+
+---
 
 ## Usage
 
-1. **Upload Insurance Card** - Snap a photo or upload an image
-2. **Describe Symptoms** - Free-form text description of your issue
-3. **Enter Location** - ZIP code or city
+### Web Interface
+
+1. **Enter Symptoms** - Describe your health issue in plain English
+2. **Enter Location** - City, ZIP code, or full address
+3. **Select Insurance** - Choose your insurance plan from dropdown
 4. **Get Recommendation** - See where to go and what you'll pay
+
+### API Usage
+
+```bash
+curl -X POST http://localhost:8000/advisor/recommend \
+  -H "Content-Type: application/json" \
+  -d '{
+    "symptoms": "Twisted ankle, swelling and pain",
+    "location": "San Francisco, CA",
+    "insurance_plan": "anthem_ppo"
+  }'
+```
+
+### Response Example
+
+```json
+{
+  "recommended": {
+    "name": "Carbon Health Downtown",
+    "address": "123 Market St, San Francisco, CA",
+    "distance_miles": 0.8,
+    "your_cost": 145,
+    "wait_time": "30 min",
+    "confidence": "high"
+  },
+  "reasoning": [
+    "Lowest total cost at $145 (vs $850 ER average)",
+    "Closest location at 0.8 miles",
+    "Shortest wait time",
+    "X-ray available on-site"
+  ],
+  "why_not_er": "Your injury doesn't require emergency care. An urgent care facility can handle ankle injuries with X-rays and splinting at a fraction of the ER cost.",
+  "alternatives": [...],
+  "urgency": "moderate",
+  "care_level": "urgent_care"
+}
+```
+
+---
+
+## Demo Scenarios
+
+### Scenario 1: Ankle Twist
+- **Symptoms**: "Twisted ankle running, swelling and pain"
+- **Insurance**: Anthem PPO Silver
+- **Result**: Saves $705 by going to urgent care vs ER
+
+### Scenario 2: Sore Throat
+- **Symptoms**: "Sore throat 3 days, fever 101°F"
+- **Insurance**: Aetna HMO
+- **Result**: Highlights facility with best price transparency
+
+### Scenario 3: Uninsured Care
+- **Symptoms**: "Cut hand while cooking, bled for 10 min"
+- **Insurance**: Self-pay
+- **Result**: Balances cost + quality + distance for uninsured
+
+---
+
+## Development Roadmap
+
+- [x] Phase 1: Project Foundation
+- [x] Phase 2: Backend API Architecture (FastAPI + endpoints)
+- [x] Phase 3: OpenRouter Agent System (Symptom Enricher + Ranking)
+- [x] Phase 4: Firecrawl Price Discovery (Search + Agent extraction)
+- [x] Phase 5: Geocoding & Distance Calculation
+- [x] Phase 6: Agent Orchestration (4-phase pipeline)
+- [x] Phase 7: Frontend Dashboard (Next.js + Tailwind)
+- [x] Phase 8: Live Wait Time Extraction
+- [ ] Phase 9: Reducto Insurance OCR Integration
+- [ ] Phase 10: Supabase Caching Layer
+- [ ] Phase 11: WebSocket Agent Visualization
+- [ ] Phase 12: Production Deployment
+
+---
 
 ## Sponsor Track Relevance
 
 ### OpenRouter ($1,000 credits)
 - **Vertical agent architecture** - Multi-agent orchestration for healthcare
-- **Cost-optimized model routing** - DeepSeek for triage ($0.001), Sonnet for ranking ($0.015)
+- **Cost-optimized model routing** - Claude Haiku for speed ($0.001/1K tokens)
+- **Intelligent fallbacks** - Haiku → Sonnet → DeepSeek
 - **15x cost reduction** vs. GPT-4 everywhere
 
 ### Firecrawl ($5,000 + credits)
-- **Web intelligence** - Real-time price discovery from facility websites
-- **Hidden data extraction** - Finding pricing PDFs and transparency documents
-- **Transparency scoring** - Rating facilities on data freshness and availability
+- **Multi-tier approach** - `/search` for discovery, `/agent` for deep extraction
+- **Autonomous navigation** - Agent finds pricing from complex websites
+- **Hidden data extraction** - Finds pricing PDFs and transparency documents
+- **Confidence scoring** - Rates data freshness and verification level
 
 ### Reducto ($1,000 + credits)
 - **Document intelligence** - OCR extraction from insurance cards
@@ -153,39 +405,31 @@ SUPABASE_KEY=your_supabase_key_here  # Optional
 - **Caching layer** - Price data and facility information
 - **Real-time features** - Live agent stream visualization
 
-## Demo Scenarios
+---
 
-### Scenario 1: Ankle Twist → Savings
-- **Symptoms**: "Twisted ankle running, swelling and pain"
-- **Insurance**: Anthem PPO Silver
-- **Result**: Saves $705 by going to urgent care vs ER
+## Testing
 
-### Scenario 2: Transparency Wins
-- **Symptoms**: "Sore throat 3 days, fever 101°F"
-- **Insurance**: Aetna HMO
-- **Result**: Highlights facility with best price transparency
+```bash
+# Run advisor pipeline test
+python backend/advisor.py
 
-### Scenario 3: Uninsured Care
-- **Symptoms**: "Cut hand while cooking, bled for 10 min"
-- **Insurance**: Self-pay
-- **Result**: Balances cost + quality + distance for uninsured
+# Test geocoding service
+python backend/geocoding.py
 
-## Development Roadmap
+# Test live wait time extraction
+python backend/test_live_time.py
 
-- [x] Phase 1: Project Foundation
-- [ ] Phase 2: Backend API Architecture
-- [ ] Phase 3: Reducto Insurance OCR
-- [ ] Phase 4: OpenRouter Agent System
-- [ ] Phase 5: Firecrawl Price Discovery
-- [ ] Phase 6: Agent Orchestration
-- [ ] Phase 7: Frontend Dashboard
-- [ ] Phase 8: Agent Visualization
-- [ ] Phase 9: Demo Polish
-- [ ] Phase 10: Deployment
+# Test end-to-end flow
+python backend/test_e2e_flow.py
+```
+
+---
 
 ## Team
 
 Built for SF Hackathon 2026
+
+---
 
 ## License
 
