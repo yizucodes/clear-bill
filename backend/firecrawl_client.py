@@ -99,9 +99,18 @@ class FirecrawlClient:
             "facilities": [],
             "pricing_sources": [],
             "data_quality": "unknown",
-            "disclaimer": ""
+            "data_quality": "unknown",
+            "disclaimer": "",
+            "verification_status": "skipped"
         }
         
+        # CACHE CHECK: Look for existing file matching query/location
+        cache_key = f"{queries[0]}_{location}".replace(" ", "_").lower()
+        cached = self._get_cached_result(cache_key)
+        if cached:
+            logger.info(f"⚡️ CACHE HIT: Found existing results for {cache_key}")
+            return cached
+
         # If no API key, return mock data
         if not self.api_key:
             logger.info("No API key, using mock facilities")
@@ -180,6 +189,36 @@ class FirecrawlClient:
         for candidate in top_candidates:
             enriched = self._enrich_with_pricing(candidate, pricing_lookup)
             enriched_facilities.append(enriched)
+        
+        
+        # TIER 3: VERIFICATION
+        # If the top candidate is good but lacks verified data, do a targeted extraction
+        # This is the "High ROI" addition: Spending extra time/credits only on the winner
+        if top_candidates and self.api_key:
+            top = enriched_facilities[0]
+            if top.get("confidence") != "high" and top.get("url"):
+                logger.info(f"🔎 Verifying top candidate: {top['name']}")
+                verified_data = await self._verify_top_candidate(top["url"])
+                
+                if verified_data:
+                    # Update the top candidate with verified data
+                    if verified_data.get("wait_time_minutes") is not None:
+                        top["wait_time"] = f"{verified_data['wait_time_minutes']} min"
+                        top["wait_time_source"] = "verified_live_agent"
+                        top["wait_time_status"] = verified_data.get("wait_time_status")
+                    
+                    if verified_data.get("urgent_care_price"):
+                        top["pricing"]["urgent_care_visit"] = verified_data["urgent_care_price"]
+                        top["pricing_source"] = "verified_agent_extract"
+                        top["confidence"] = "high"
+                    
+                    if verified_data.get("insurance_accepted"):
+                        top["insurance_accepted"] = verified_data["insurance_accepted"]
+                    
+                    result["phases"]["verification"] = {"status": "success", "url": top["url"]}
+                    logger.info(f"✅ Verified top candidate: {top['name']} - Wait: {top.get('wait_time')}")
+                else:
+                    result["phases"]["verification"] = {"status": "failed_or_empty"}
         
         result["facilities"] = enriched_facilities
         
@@ -294,6 +333,48 @@ class FirecrawlClient:
                 for r in results
                 if r.get("markdown")
             ]
+
+    async def _verify_top_candidate(self, url: str) -> Optional[Dict]:
+        """
+        High-ROI Step: Perform targeted LLM extraction on the single best result.
+        This gets us 'ground truth' data for the one facility that matters most.
+        """
+        schema = {
+            "type": "object",
+            "properties": {
+                "wait_time_minutes": {"type": "integer", "description": "Current wait time in minutes if explicitly stated"},
+                "wait_time_status": {"type": "string", "enum": ["Low", "Moderate", "High", "No Wait", "Unknown"]},
+                "urgent_care_price": {"type": "integer", "description": "Cash price for a basic visit"},
+                "insurance_accepted": {"type": "array", "items": {"type": "string"}},
+                "services": {"type": "array", "items": {"type": "string"}}
+            }
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{self.base_url}/scrape",
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    json={
+                        "url": url,
+                        "formats": ["extract"],
+                        "extract": {
+                            "schema": schema,
+                            "prompt": "Extract the current wait time, cash prices for visits, and insurance accepted. Look for 'Wait Time', 'Self-Pay', 'Pricing'. If no specific wait time, infer status."
+                        }
+                    }
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    return data.get("data", {}).get("extract")
+                else:
+                    logger.warning(f"Verification failed for {url}: {response.status_code}")
+                    return None
+                    
+        except Exception as e:
+            logger.error(f"Verification error: {e}")
+            return None
     
     def _build_pricing_lookup(self, pricing_pages: List[Dict]) -> Dict[str, Dict]:
         """Build a domain -> pricing + wait time lookup from scraped pages."""
@@ -538,6 +619,37 @@ class FirecrawlClient:
         }
         return disclaimers.get(quality, disclaimers["estimated"])
     
+    def _get_cached_result(self, cache_key: str) -> Optional[Dict]:
+        """Check for most recent existing result matching the key."""
+        try:
+            # Look for files like search_20240131_..._success.json
+            files = list(self.results_dir.glob("*.json"))
+            
+            # Filter for files possibly relevant to this query (simple heuristic)
+            # In a real app we'd hash the query, but for hackathon this is fine
+            matches = []
+            for f in files:
+                try:
+                    data = json.loads(f.read_text())
+                    # Check if query and location match loosely
+                    if cache_key in f.name or (
+                        data.get("location") and 
+                        data.get("location").split(",")[0].lower() in cache_key
+                    ):
+                        matches.append((f.stat().st_mtime, data))
+                except:
+                    continue
+            
+            if matches:
+                # Return most recent
+                matches.sort(key=lambda x: x[0], reverse=True)
+                return matches[0][1]
+                
+        except Exception as e:
+            logger.warning(f"Cache lookup failed: {e}")
+        
+        return None
+
     def _mock_facilities(self, location: str) -> List[Dict]:
         """Return mock facilities with realistic wait times."""
         return [

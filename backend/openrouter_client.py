@@ -85,8 +85,8 @@ Return JSON with EXACTLY these fields:
 {{
   "urgency": "low" | "moderate" | "high" | "emergency",
   "care_level": "primary_care" | "urgent_care" | "emergency_room",
-  "search_queries": ["2-3 search queries to find appropriate facilities"],
-  "expected_procedures": ["list of likely procedures"],
+  "search_queries": ["2-3 hyper-specific search queries. For injuries, include 'x-ray' or 'orthopedic'"],
+  "expected_procedures": ["list of likely procedures, e.g. 'Ankle 3-view X-ray'"],
   "keywords": ["facility qualities to look for"]
 }}
 
@@ -211,6 +211,20 @@ Return ONLY valid JSON, no markdown, no explanation."""
                 ],
                 expected_procedures=["emergency evaluation", "immediate treatment"],
                 keywords=["24/7", "emergency", "trauma center"]
+            )
+        
+        # Ankle/Foot specific (Demo Optimization)
+        if "ankle" in symptoms_lower or "foot" in symptoms_lower:
+            return SymptomEnrichment(
+                urgency="moderate",
+                care_level="urgent_care",
+                search_queries=[
+                    f"urgent care with x-ray {location}",
+                    f"orthopedic urgent care {location}",
+                    f"walk-in clinic ankle injury {location}"
+                ],
+                expected_procedures=["Ankle X-ray", "Splinting", "Evaluation"],
+                keywords=["X-ray on-site", "Orthopedic", "Walk-in"]
             )
         
         # High urgency detection
