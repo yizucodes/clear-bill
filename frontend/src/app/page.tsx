@@ -412,14 +412,18 @@ export default function Home() {
                             <span className="rating-text">{result.recommended.rating}</span>
                           </div>
                         )}
-                        <div className="meta-item">
-                          <MapPin size={16} className="icon-muted" />
-                          <span className="meta-item-text">{result.recommended.distance_miles} miles</span>
-                        </div>
-                        <div className="meta-item">
-                          <Clock size={16} className="icon-muted" />
-                          <span className="meta-item-text">~{result.recommended.wait_time} wait</span>
-                        </div>
+                        {result.recommended.distance_miles != null && (
+                          <div className="meta-item">
+                            <MapPin size={16} className="icon-muted" />
+                            <span className="meta-item-text">{typeof result.recommended.distance_miles === 'number' ? result.recommended.distance_miles.toFixed(1) : result.recommended.distance_miles} miles</span>
+                          </div>
+                        )}
+                        {result.recommended.wait_time && (
+                          <div className="meta-item">
+                            <Clock size={16} className="icon-muted" />
+                            <span className="meta-item-text">{result.recommended.wait_time}</span>
+                          </div>
+                        )}
                       </div>
 
                       {result.recommended.address && (
@@ -516,8 +520,10 @@ export default function Home() {
                             </div>
                             <h4 className="alternative-name">{alt.name}</h4>
                             <div className="alternative-meta">
-                              <span>{alt.distance_miles} mi</span>
-                              <span>{alt.wait_time}</span>
+                              {alt.distance_miles != null && (
+                                <span>{typeof alt.distance_miles === 'number' ? alt.distance_miles.toFixed(1) : alt.distance_miles} mi</span>
+                              )}
+                              {alt.wait_time && <span>{alt.wait_time}</span>}
                             </div>
                           </div>
                           <div className="alternative-cost">
