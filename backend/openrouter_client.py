@@ -423,28 +423,62 @@ Return ONLY valid JSON."""
             )
 
     def _hydrate_facility_data(self, target: dict, sources: List[dict]):
-        """Inject valid data (distance, wait_time) from source facilities into LLM result."""
+        """Inject valid data (distance, wait_time, address, url) from source facilities into LLM result."""
         if not target or not sources:
             return
-            
+
         target_name = target.get("name", "").lower()
-        
-        # Find best match
+        target_url = target.get("url", "").lower()
+
+        # Find best match - prioritize URL match (more unique), then name
         best_match = None
-        for source in sources:
-            src_name = source.get("name", "").lower()
-            # Check for substring match in either direction
-            if src_name in target_name or target_name in src_name:
-                best_match = source
-                break
+
+        # First pass: exact URL match (most reliable)
+        if target_url:
+            for source in sources:
+                src_url = source.get("url", "").lower()
+                if src_url and (src_url == target_url or target_url in src_url or src_url in target_url):
+                    best_match = source
+                    break
+
+        # Second pass: name + address combo (for chain locations)
+        if not best_match:
+            target_address = target.get("address", "").lower()
+            for source in sources:
+                src_name = source.get("name", "").lower()
+                src_address = source.get("address", "").lower()
+                # If addresses match, use this source
+                if target_address and src_address and target_address in src_address:
+                    best_match = source
+                    break
+                # Otherwise, require more specific name match
+                if src_name == target_name:  # Exact match only
+                    best_match = source
+                    break
+
+        # Third pass: substring match (fallback, less reliable for chains)
+        if not best_match:
+            for source in sources:
+                src_name = source.get("name", "").lower()
+                if src_name in target_name or target_name in src_name:
+                    best_match = source
+                    break
         
         if best_match:
             # Inject trusted data if missing or null in target
             if not target.get("distance_miles") and "distance_miles" in best_match:
                 target["distance_miles"] = best_match["distance_miles"]
-                
+
             if not target.get("wait_time") and "wait_time" in best_match:
                 target["wait_time"] = best_match["wait_time"]
+
+            # Inject address for UX credibility
+            if not target.get("address") and best_match.get("address"):
+                target["address"] = best_match["address"]
+
+            # Inject URL for "Visit Website" button
+            if not target.get("url") and best_match.get("url"):
+                target["url"] = best_match["url"]
             
             # Fix keys (LLM sometimes uses 'distance' instead of 'distance_miles')
             if "distance" in target and not target.get("distance_miles"):
@@ -506,6 +540,10 @@ Return ONLY valid JSON."""
                 {
                     "name": f.get("name"),
                     "your_cost": f.get("total_cost", 0),
+                    "address": f.get("address"),
+                    "distance_miles": f.get("distance_miles"),
+                    "wait_time": f.get("wait_time"),
+                    "url": f.get("url"),
                     "reason_not_top": "Higher cost" if f.get("total_cost", 0) > top_cost else "Further away"
                 }
                 for f in sorted_facilities[1:3]
