@@ -29,7 +29,7 @@ class InsuranceInfo(BaseModel):
     """Insurance information from OCR or manual entry"""
     provider: str = Field(..., description="Insurance provider name (e.g., 'Anthem Blue Cross')")
     plan_name: str = Field(..., description="Plan type (e.g., 'PPO Silver')")
-    member_id: str = Field(..., description="Member ID number")
+    member_id: Optional[str] = Field(None, description="Member ID number (optional)")
     benefits: Optional[InsuranceBenefits] = Field(None, description="Benefit details")
     confidence: Optional[float] = Field(None, description="OCR confidence score (0-1)")
 

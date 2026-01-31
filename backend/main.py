@@ -23,6 +23,7 @@ from models import (
     AgentStep,
     AgentStepStatus,
 )
+from advisor import ClearBillAdvisor, get_healthcare_recommendation
 
 # Load environment variables
 load_dotenv()
@@ -155,7 +156,7 @@ async def upload_insurance_card(
 
 # ==================== Facility Recommendation ====================
 
-@app.post("/advisor/recommend", response_model=RecommendationResponse)
+@app.post("/advisor/recommend")
 async def get_recommendation(request: RecommendationRequest):
     """
     Get intelligent facility recommendation based on symptoms, insurance, and location.
@@ -170,15 +171,59 @@ async def get_recommendation(request: RecommendationRequest):
         request: RecommendationRequest with symptoms, insurance, location
     
     Returns:
-        RecommendationResponse with recommended facility and reasoning
+        Full recommendation with facility, reasoning, and alternatives
     """
-    # TODO: Implement multi-agent orchestration
-    # This will be implemented in Phases 4-6
+    logger.info(f"Received recommendation request: symptoms='{request.symptoms[:50]}...', location='{request.location}'")
     
-    return RecommendationResponse(
-        success=False,
-        error="Recommendation endpoint not yet implemented - will be available after Phase 6"
-    )
+    try:
+        # Extract insurance plan from request
+        insurance_plan = None
+        if request.insurance:
+            # Build plan key from provider + plan type
+            provider = request.insurance.provider.lower().replace(" ", "_")
+            plan = request.insurance.plan_name.lower()
+            
+            # Map to our copay lookup keys
+            if "anthem" in provider:
+                insurance_plan = "anthem_ppo" if "ppo" in plan else "anthem_hmo"
+            elif "blue" in provider or "bcbs" in provider:
+                insurance_plan = "bcbs_ppo" if "ppo" in plan else "bcbs_hmo"
+            elif "aetna" in provider:
+                insurance_plan = "aetna_ppo" if "ppo" in plan else "aetna_hmo"
+            elif "cigna" in provider:
+                insurance_plan = "cigna_ppo" if "ppo" in plan else "cigna_hmo"
+            elif "united" in provider:
+                insurance_plan = "unitedhealth_ppo" if "ppo" in plan else "unitedhealth_hmo"
+            elif "kaiser" in provider:
+                insurance_plan = "kaiser"
+            elif "medicare" in provider or "medicare" in plan:
+                insurance_plan = "medicare"
+            else:
+                # Default based on plan type
+                insurance_plan = "bcbs_ppo" if "ppo" in plan else "bcbs_hmo"
+        
+        # Get recommendation from advisor
+        result = await get_healthcare_recommendation(
+            symptoms=request.symptoms,
+            location=request.location,
+            insurance_plan=insurance_plan
+        )
+        
+        if not result.get("success"):
+            return {
+                "success": False,
+                "error": result.get("error", "Unknown error occurred"),
+                "processing_time_ms": result.get("processing_time_ms")
+            }
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in get_recommendation: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": f"Failed to generate recommendation: {str(e)}"
+        }
 
 
 # ==================== Demo Scenarios ====================
