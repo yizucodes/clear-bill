@@ -41,3 +41,7 @@ htmlcov/
 # Misc
 *.bak
 *.tmp
+
+# Generated Data
+backend/search_results/
+backend/test_trials/
