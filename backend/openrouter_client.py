@@ -528,7 +528,9 @@ Return ONLY valid JSON."""
                 "name": top.get("name", "Unknown Facility"),
                 "your_cost": user_cost,
                 "distance_miles": top.get("distance_miles", 0),
-                "wait_time": f"{top.get('wait_time_minutes', 30)} min"
+                "wait_time": f"{top.get('wait_time_minutes', 30)} min",
+                "address": top.get("address"),
+                "url": top.get("url")
             },
             reasoning=[
                 f"Lowest estimated cost (${user_cost:.0f})",

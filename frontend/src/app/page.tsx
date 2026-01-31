@@ -8,7 +8,6 @@ import {
   Clock,
   DollarSign,
   Star,
-  Navigation,
   CheckCircle2,
   Loader2,
   Sparkles,
@@ -433,10 +432,6 @@ export default function Home() {
                       )}
 
                       <div className="facility-actions">
-                        <button className="btn btn-success">
-                          <Navigation size={18} />
-                          <span>Get Directions</span>
-                        </button>
                         {result.recommended.url && (
                           <a
                             href={result.recommended.url}
