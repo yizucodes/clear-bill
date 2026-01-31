@@ -866,7 +866,14 @@ body {
   font-size: 1.125rem;
   font-weight: 600;
   color: white;
+  margin-bottom: 0.25rem;
+}
+
+.alternative-address {
+  font-size: 0.8rem;
+  color: #64748b;
   margin-bottom: 0.5rem;
+  line-height: 1.3;
 }
 
 .alternative-meta {

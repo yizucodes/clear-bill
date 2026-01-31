@@ -39,10 +39,12 @@ interface RecommendedFacility {
 interface Alternative {
   name: string;
   your_cost: number;
-  distance_miles: number;
-  wait_time: string;
+  address?: string;
+  distance_miles?: number;
+  wait_time?: string;
   url?: string;
   data_source?: string;
+  reason_not_top?: string;
 }
 
 interface Phase {
@@ -519,6 +521,9 @@ export default function Home() {
                               )}
                             </div>
                             <h4 className="alternative-name">{alt.name}</h4>
+                            {alt.address && (
+                              <p className="alternative-address">{alt.address}</p>
+                            )}
                             <div className="alternative-meta">
                               {alt.distance_miles != null && (
                                 <span>{typeof alt.distance_miles === 'number' ? alt.distance_miles.toFixed(1) : alt.distance_miles} mi</span>
