@@ -65,9 +65,14 @@ class ClearBillAdvisor:
     """
     
     def __init__(self):
-        self.symptom_agent = SymptomEnricherAgent()
+        # Phase 1: Fast Triage (Haiku)
+        self.symptom_agent = SymptomEnricherAgent(model="anthropic/claude-3.5-haiku")
+        
+        # Phase 2 & 3: Firecrawl Discovery
         self.firecrawl = FirecrawlClient()
-        self.ranking_agent = RankingAgent()
+        
+        # Phase 4: High Reasoning (DeepSeek R1)
+        self.ranking_agent = RankingAgent(model="deepseek/deepseek-r1")
         
         logger.info("ClearBillAdvisor initialized with all agents")
     
@@ -190,7 +195,8 @@ class ClearBillAdvisor:
                 facilities=enriched_facilities,
                 insurance_copay=urgent_care_copay,
                 er_copay=er_copay,
-                urgency=enrichment.urgency
+                urgency=enrichment.urgency,
+                care_level=enrichment.care_level
             )
             
             phases["ranking"] = {

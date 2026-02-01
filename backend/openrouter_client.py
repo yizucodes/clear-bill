@@ -24,6 +24,7 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 # Order: try fast/cheap first, then fall back to alternatives
 MODELS = [
     "anthropic/claude-3.5-haiku",  # Primary: fast, cheap (Haiku 3.5 is widely available)
+    "deepseek/deepseek-r1",        # Reasoning: for complex triage (High ROI)
     "anthropic/claude-3-haiku",    # Fallback 1: original Haiku
     "anthropic/claude-3.5-sonnet", # Fallback 2: more capable, slightly slower
     "openai/gpt-4o-mini",          # Fallback 3: OpenAI alternative
@@ -268,18 +269,29 @@ class RankingAgent:
     SYSTEM_PROMPT = """You are a healthcare cost advisor. Your job is to rank healthcare facilities and recommend the best option for the patient based on cost, convenience, and appropriateness.
 
 Always consider:
-1. Total out-of-pocket cost (most important for non-emergencies)
-2. Distance and wait time
-3. Appropriateness for the condition
+1. CARE LEVEL MATCH (most important): The recommended facility type MUST match the required care level. If urgent_care is required, DO NOT recommend primary care offices.
+2. Total out-of-pocket cost (important for non-emergencies)
+3. Distance and wait time
 4. Patient should NOT go to ER unless it's an emergency
 
 Be direct and helpful. Return valid JSON only."""
 
+    # Map care level codes to readable labels
+    CARE_LEVEL_LABELS = {
+        "urgent_care": "Urgent Care",
+        "primary_care": "Primary Care",
+        "emergency_room": "Emergency Room",
+        "virtual_care": "Virtual Care"
+    }
+
     USER_PROMPT_TEMPLATE = """Rank these facilities and recommend the best option.
 
 Urgency Level: {urgency}
+Required Care Level: {care_level}
 Insurance Copay for Urgent Care: ${copay}
 Insurance Copay for ER: ${er_copay}
+
+IMPORTANT: Only recommend facilities that match the required care level ({care_level}). If Urgent Care is required, prioritize urgent care clinics over primary care offices. Use the human-readable care level name in your reasoning (e.g., "Urgent Care" not "urgent_care").
 
 Facilities:
 {facilities_json}
@@ -310,31 +322,33 @@ Return ONLY valid JSON."""
             logger.warning("OpenRouter API key not configured, will use mock responses")
     
     async def rank(
-        self, 
-        facilities: List[dict], 
-        insurance_copay: float, 
+        self,
+        facilities: List[dict],
+        insurance_copay: float,
         er_copay: float,
-        urgency: str
+        urgency: str,
+        care_level: str = "urgent_care"
     ) -> RankingResult:
         """
         Rank facilities and generate recommendation.
-        
+
         Args:
             facilities: List of facility dicts from Firecrawl
             insurance_copay: User's urgent care copay
             er_copay: User's ER copay
             urgency: Urgency level from symptom enrichment
-        
+            care_level: Required care level (urgent_care, primary_care, emergency_room)
+
         Returns:
             RankingResult with recommendation and reasoning
         """
         if not facilities:
             return self._get_empty_result()
-        
+
         # If no API key or only one facility, use simple ranking
         if not self.api_key or len(facilities) == 1:
             logger.info("Using mock ranking")
-            return self._get_mock_ranking(facilities, insurance_copay, er_copay, urgency)
+            return self._get_mock_ranking(facilities, insurance_copay, er_copay, urgency, care_level)
         
         # Try primary model first, then fallbacks
         models_to_try = [self.model] + self.fallback_models
@@ -342,25 +356,26 @@ Return ONLY valid JSON."""
         
         for model in models_to_try:
             try:
-                result = await self._try_rank_model(model, facilities, insurance_copay, er_copay, urgency)
+                result = await self._try_rank_model(model, facilities, insurance_copay, er_copay, urgency, care_level)
                 if result:
                     return result
             except Exception as e:
                 last_error = e
                 logger.warning(f"Ranking model {model} failed: {e}. Trying next model...")
                 continue
-        
+
         # All models failed, use mock ranking
         logger.error(f"All ranking models failed. Last error: {last_error}. Using mock ranking.")
-        return self._get_mock_ranking(facilities, insurance_copay, er_copay, urgency)
+        return self._get_mock_ranking(facilities, insurance_copay, er_copay, urgency, care_level)
     
     async def _try_rank_model(
-        self, 
-        model: str, 
-        facilities: List[dict], 
-        insurance_copay: float, 
+        self,
+        model: str,
+        facilities: List[dict],
+        insurance_copay: float,
         er_copay: float,
-        urgency: str
+        urgency: str,
+        care_level: str
     ) -> Optional[RankingResult]:
         """Try ranking with a specific model."""
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -378,6 +393,7 @@ Return ONLY valid JSON."""
                         {"role": "system", "content": self.SYSTEM_PROMPT},
                         {"role": "user", "content": self.USER_PROMPT_TEMPLATE.format(
                             urgency=urgency,
+                            care_level=self.CARE_LEVEL_LABELS.get(care_level, care_level),
                             copay=insurance_copay,
                             er_copay=er_copay,
                             facilities_json=json.dumps(facilities, indent=2)
@@ -499,42 +515,66 @@ Return ONLY valid JSON."""
         )
     
     def _get_mock_ranking(
-        self, 
-        facilities: List[dict], 
-        copay: float, 
+        self,
+        facilities: List[dict],
+        copay: float,
         er_copay: float,
-        urgency: str
+        urgency: str,
+        care_level: str = "urgent_care"
     ) -> RankingResult:
         """
         Simple cost-based ranking when API is unavailable.
+        Prioritizes facilities matching the required care level.
         """
-        # Sort by total cost (prefer lower cost)
+        # Helper to check if facility matches care level
+        def matches_care_level(facility: dict) -> bool:
+            name = facility.get("name", "").lower()
+            facility_type = facility.get("type", "").lower()
+
+            if care_level == "urgent_care":
+                # Prefer urgent care, walk-in clinics
+                return any(kw in name or kw in facility_type for kw in ["urgent", "walk-in", "walkin", "immediate"])
+            elif care_level == "primary_care":
+                # Prefer primary care, doctor's offices
+                return any(kw in name or kw in facility_type for kw in ["primary", "doctor", "family", "physician"])
+            elif care_level == "emergency_room":
+                return any(kw in name or kw in facility_type for kw in ["emergency", "er ", " er", "hospital"])
+            return True
+
+        # Sort: matching care level first, then by cost
         sorted_facilities = sorted(
-            facilities, 
-            key=lambda f: f.get("total_cost", f.get("pricing", {}).get("urgent_care", 300))
+            facilities,
+            key=lambda f: (
+                0 if matches_care_level(f) else 1,  # Care level match first
+                f.get("total_cost", f.get("pricing", {}).get("urgent_care", 300))  # Then by cost
+            )
         )
         
         top = sorted_facilities[0]
-        top_cost = top.get("total_cost", 0)
-        
+        top_cost = top.get("total_cost") or 0
+
         # Calculate user's out-of-pocket cost
         if "emergency" in top.get("name", "").lower() or top.get("type") == "er":
-            user_cost = top_cost + er_copay if copay else top_cost
+            user_cost = (top_cost + er_copay) if copay else top_cost
         else:
             user_cost = copay if copay else top_cost
-        
+
+        # Ensure numeric values are not None for formatting
+        user_cost = user_cost or 0
+        distance_miles = top.get("distance_miles") or 0
+
         return RankingResult(
             recommended={
                 "name": top.get("name", "Unknown Facility"),
                 "your_cost": user_cost,
-                "distance_miles": top.get("distance_miles", 0),
-                "wait_time": f"{top.get('wait_time_minutes', 30)} min",
+                "distance_miles": distance_miles,
+                "wait_time": f"{top.get('wait_time_minutes') or 30} min",
                 "address": top.get("address"),
                 "url": top.get("url")
             },
             reasoning=[
                 f"Lowest estimated cost (${user_cost:.0f})",
-                f"Closest location ({top.get('distance_miles', 0):.1f} miles)",
+                f"Closest location ({distance_miles:.1f} miles)",
                 "Appropriate care level for your symptoms"
             ],
             why_not_er="Your condition doesn't require emergency care. ER would cost significantly more with longer wait times." if urgency != "emergency" else None,
