@@ -119,9 +119,10 @@ class ClearBillAdvisor:
                     success=True,
                     recommended={
                         "name": "CALL 911 or go to nearest Emergency Room",
-                        "your_cost": "N/A - this is an emergency",
-                        "distance_miles": 0,
-                        "wait_time": "Immediate"
+                        "your_cost": None,  # Cost doesn't matter in emergencies
+                        "distance_miles": None,  # Go to nearest ER
+                        "wait_time": None,
+                        "is_emergency": True
                     },
                     reasoning=[
                         "Your symptoms indicate a medical emergency",

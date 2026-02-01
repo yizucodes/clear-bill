@@ -25,14 +25,15 @@ import {
 // Types matching backend response
 interface RecommendedFacility {
   name: string;
-  your_cost: number;
-  distance_miles: number;
-  wait_time: string;
+  your_cost: number | null;
+  distance_miles: number | null;
+  wait_time: string | null;
   address?: string;
   rating?: number;
   url?: string;
   data_source?: string;
   confidence?: string;
+  is_emergency?: boolean;
 }
 
 interface Alternative {
@@ -406,26 +407,29 @@ export default function Home() {
                     <div>
                       <h2 className="facility-name">{result.recommended.name}</h2>
 
-                      <div className="facility-meta">
-                        {result.recommended.rating && (
-                          <div className="meta-item">
-                            <Star size={16} fill="#fbbf24" className="icon-star" />
-                            <span className="rating-text">{result.recommended.rating}</span>
-                          </div>
-                        )}
-                        {result.recommended.distance_miles != null && (
-                          <div className="meta-item">
-                            <MapPin size={16} className="icon-muted" />
-                            <span className="meta-item-text">{typeof result.recommended.distance_miles === 'number' ? result.recommended.distance_miles.toFixed(1) : result.recommended.distance_miles} miles</span>
-                          </div>
-                        )}
-                        {result.recommended.wait_time && (
-                          <div className="meta-item">
-                            <Clock size={16} className="icon-muted" />
-                            <span className="meta-item-text">{result.recommended.wait_time}</span>
-                          </div>
-                        )}
-                      </div>
+                      {/* Hide meta for emergencies */}
+                      {result.urgency !== 'emergency' && (
+                        <div className="facility-meta">
+                          {result.recommended.rating && (
+                            <div className="meta-item">
+                              <Star size={16} fill="#fbbf24" className="icon-star" />
+                              <span className="rating-text">{result.recommended.rating}</span>
+                            </div>
+                          )}
+                          {result.recommended.distance_miles != null && result.recommended.distance_miles > 0 && (
+                            <div className="meta-item">
+                              <MapPin size={16} className="icon-muted" />
+                              <span className="meta-item-text">{result.recommended.distance_miles.toFixed(1)} miles</span>
+                            </div>
+                          )}
+                          {result.recommended.wait_time && !result.recommended.wait_time.toLowerCase().includes('unknown') && (
+                            <div className="meta-item">
+                              <Clock size={16} className="icon-muted" />
+                              <span className="meta-item-text">{result.recommended.wait_time}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {result.recommended.address && (
                         <p className="facility-address">{result.recommended.address}</p>
@@ -446,13 +450,16 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <div className="cost-card">
-                      <div className="cost-label">Your estimated cost</div>
-                      <div className="cost-amount">${result.recommended.your_cost}</div>
-                      {getSavingsVsER() > 0 && (
-                        <div className="cost-savings">Save ${getSavingsVsER()} vs ER</div>
-                      )}
-                    </div>
+                    {/* Hide cost card for emergencies */}
+                    {result.urgency !== 'emergency' && result.recommended.your_cost != null && (
+                      <div className="cost-card">
+                        <div className="cost-label">Your estimated cost</div>
+                        <div className="cost-amount">${result.recommended.your_cost}</div>
+                        {getSavingsVsER() > 0 && (
+                          <div className="cost-savings">Save ${getSavingsVsER()} vs ER</div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Why Recommended */}
@@ -520,10 +527,10 @@ export default function Home() {
                               <p className="alternative-address">{alt.address}</p>
                             )}
                             <div className="alternative-meta">
-                              {alt.distance_miles != null && (
-                                <span>{typeof alt.distance_miles === 'number' ? alt.distance_miles.toFixed(1) : alt.distance_miles} mi</span>
+                              {alt.distance_miles != null && alt.distance_miles > 0 && (
+                                <span>{alt.distance_miles.toFixed(1)} mi</span>
                               )}
-                              {alt.wait_time && <span>{alt.wait_time}</span>}
+                              {alt.wait_time && !alt.wait_time.toLowerCase().includes('unknown') && <span>{alt.wait_time}</span>}
                             </div>
                           </div>
                           <div className="alternative-cost">
