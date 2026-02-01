@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Navigation from "./components/Navigation";
 
 export const metadata: Metadata = {
-  title: "ClearBill Advisor | Find the Right Care at the Right Price",
-  description: "AI-powered healthcare navigator that analyzes your symptoms and insurance to recommend the best, most affordable care option near you.",
-  keywords: ["healthcare", "urgent care", "medical costs", "insurance", "AI healthcare"],
+  title: "ClearBill | Healthcare Made Clear",
+  description: "AI-powered healthcare navigator and medical bill dispute assistant.",
+  keywords: ["healthcare", "urgent care", "medical costs", "insurance", "AI healthcare", "medical bill dispute"],
   openGraph: {
-    title: "ClearBill Advisor",
+    title: "ClearBill",
     description: "Find the right care at the right price with AI-powered recommendations",
     type: "website",
   },
@@ -18,8 +19,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" suppressHydrationWarning>
+      <body suppressHydrationWarning>
+        <Navigation />
         {children}
       </body>
     </html>
