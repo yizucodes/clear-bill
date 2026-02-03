@@ -885,7 +885,10 @@ python backend/test_live_time.py
 
 ## Team
 
-Built for SF Hackathon 2026
+Dhruv
+Yi
+
+Built with ❤️ for YC Hack the Stackathon
 
 ---
 
