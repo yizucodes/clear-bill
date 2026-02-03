@@ -9,6 +9,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
+venv
 venv/
 env/
 ENV/
@@ -41,6 +42,13 @@ htmlcov/
 # Misc
 *.bak
 *.tmp
+permission_test.txt
+get-pip.py
+
+# Setup scripts (temporary)
+backend/setup_env.py
+backend/setup_lib.py
+backend/.pip_cache/
 
 # Generated Data
 backend/search_results/
