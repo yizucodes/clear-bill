@@ -1,14 +1,22 @@
 # ClearBill Advisor
 
-> A healthcare vertical agent that tells you where to go and what you'll pay—in seconds.
+> A healthcare vertical agent that tells you where to go, what you'll pay—and helps you fight back against overcharges.
 
 ## The Problem
 
-45 million Americans don't know where to go for care or what it will cost. This leads to $700+ ER bills when urgent care would be $145. Healthcare navigation is broken.
+**Before care**: 45 million Americans don't know where to go or what it will cost. This leads to $700+ ER bills when urgent care would be $145.
+
+**After care**: 80% of medical bills contain errors, with an average overcharge of $1,000+ per visit. Most patients never dispute because the process is too complex.
+
+Healthcare navigation and billing transparency are both broken.
 
 ## Solution
 
-ClearBill Advisor uses AI agents to analyze symptoms, discover nearby facilities, extract real-time pricing from websites, and recommend the most cost-effective care option personalized to your insurance.
+ClearBill Advisor is a dual-purpose AI agent system that helps you **before** and **after** care:
+
+**🏥 Before Care** - AI agents analyze your symptoms, discover nearby facilities, extract real-time pricing from websites, and recommend the most cost-effective care option personalized to your insurance.
+
+**💰 After Care** - AI agents parse your medical bill, extract CPT codes, cross-reference against fair market prices (via Firecrawl), identify overcharges, and auto-generate dispute letters with specific evidence.
 
 ---
 
